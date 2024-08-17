@@ -63,6 +63,16 @@ Create a superuser:
 python manage.py createsuperuser
 ```
 
+#### 2.4. Install Ollama
+
+Ollama is required for LLM processing. Follow the instructions on the [Ollama website](https://ollama.com/) to install it on your system.
+
+Once installed, you can run the Ollama server on the desired port (e.g., 11450):
+
+```bash
+ollama serve
+```
+
 ### 3. Set Up the Frontend
 
 #### 3.1. Install Node.js Dependencies
@@ -112,20 +122,54 @@ In a separate terminal, run:
 npm run dev
 ```
 
-### 6. Building for Production
+### 6. Building for Use
 
-To build the frontend for production:
+To build the frontend:
 
 ```bash
 npm run build
 npm run copy-assets
 ```
 
-This will generate a production-ready version of the app.
+This will generate a production-ready version of the app, and copy to Django Static content for serving
 
-### 7. Deploying
+### 7. Deploying with Ngrok
 
-To deploy the app, ensure that both the backend and frontend are properly configured for production. You may use Docker, AWS, or any cloud provider for deployment.
+To deploy the app for external access using Ngrok, follow these steps:
+
+#### 7.1. Install Ngrok
+
+If you haven't already installed Ngrok, you can do so by following the instructions on the [Ngrok website](https://ngrok.com/download).
+
+#### 7.2. Start the Backend
+
+Ensure that your backend is running locally using Docker:
+
+```bash
+docker-compose up --build
+```
+
+This will start the Django server and PostgreSQL database on `http://localhost:8000`.
+
+#### 7.3. Start Ngrok
+
+In a separate terminal, run Ngrok to expose your local server to the internet:
+
+```bash
+ngrok http 8000
+```
+
+Ngrok will provide a public URL (e.g., `https://abcd1234.ngrok.io`) that forwards requests to your local Django server running on `http://localhost:8000`.
+
+#### 7.4. Update Frontend Configuration
+
+In your `.env.local` file for the frontend, update the `NEXT_PUBLIC_HOST_URL` to point to the Ngrok URL:
+
+```plaintext
+NEXT_PUBLIC_HOST_URL=https://abcd1234.ngrok.io
+```
+
+Replace `https://abcd1234.ngrok.io` with the actual URL provided by Ngrok.
 
 ### 8. Troubleshooting
 
@@ -138,5 +182,3 @@ If you encounter issues, check the following:
 ## License
 
 This project is licensed under the MIT License.
-
-
