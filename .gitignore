@@ -42,5 +42,5 @@ next-env.d.ts
 .env.production
 
 # All python cache
-__pycache__/*
 *.py[cod]
+**/__pycache__/

@@ -1,36 +1,142 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Home Inventory App
+
+This project is a web application for managing household inventory and recording audio. It features a React frontend with Next.js, and a Django backend with PostgreSQL. The app allows users to manage their inventory, record audio, and process it with an LLM (using Ollama).
+It is able to fully local run and serve by ngrok
+
+## Features
+
+- Manage household inventory (CRUD operations)
+- Record and transcribe audio
+- Integration with Ollama for LLM processing
+- Dark mode support
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- [Node.js](https://nodejs.org/) (v14 or higher)
+- [Python](https://www.python.org/) (v3.8 or higher)
+- [Docker](https://www.docker.com/) (for running PostgreSQL and Django)
+- [Git](https://git-scm.com/)
 
 ## Getting Started
 
-First, run the development server:
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/household-inventory.git
+cd household-inventory
+```
+
+### 2. Set Up the Backend
+
+#### 2.1. Create and Activate a Virtual Environment
+
+```bash
+python -m venv hi
+source hi/bin/activate  # On Windows use `hi\Scripts\activate`
+```
+
+#### 2.2. Install Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+#### 2.3. Set Up the Database
+
+Ensure Docker is running and start the PostgreSQL container:
+
+```bash
+docker-compose up -d
+```
+
+Apply migrations:
+
+```bash
+python manage.py migrate
+```
+
+Create a superuser:
+
+```bash
+python manage.py createsuperuser
+```
+
+### 3. Set Up the Frontend
+
+#### 3.1. Install Node.js Dependencies
+
+Navigate to the frontend directory and install the necessary packages:
+
+```bash
+npm install
+```
+
+### 4. Environment Variables
+
+Create `.env` files for both development and production:
+
+#### Backend (.env)
+
+```plaintext
+SECRET_KEY=your-secret-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+DATABASE_URL=postgres://user:password@localhost:5432/yourdb
+```
+
+#### Frontend (.env.local)
+
+```plaintext
+NEXT_PUBLIC_HOST_URL=http://localhost:8000
+```
+
+For production, create a `.env.production` with the correct values.
+
+### 5. Running the App
+
+#### 5.1. Start the Backend
+
+Ensure the virtual environment is activated, then:
+
+```bash
+python manage.py runserver
+```
+
+#### 5.2. Start the Frontend
+
+In a separate terminal, run:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 6. Building for Production
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To build the frontend for production:
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+```bash
+npm run build
+npm run copy-assets
+```
 
-## Learn More
+This will generate a production-ready version of the app.
 
-To learn more about Next.js, take a look at the following resources:
+### 7. Deploying
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+To deploy the app, ensure that both the backend and frontend are properly configured for production. You may use Docker, AWS, or any cloud provider for deployment.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+### 8. Troubleshooting
 
-## Deploy on Vercel
+If you encounter issues, check the following:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Ensure Docker is running correctly.
+- Verify environment variables are correctly set.
+- Check that all dependencies are installed.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## License
+
+This project is licensed under the MIT License.
+
+
