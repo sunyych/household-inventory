@@ -34,3 +34,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# static content
+/api/frontend/static/build
+/api/frontend/templates/index.html
+
+.env.production
+
+# All python cache
+__pycache__/*
+*.py[cod]
