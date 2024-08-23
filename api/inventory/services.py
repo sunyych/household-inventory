@@ -1,102 +1,108 @@
-import whisper
-import datetime
-import requests
+from whisper import load_model
+from requests import post, exceptions
 import re
 import os
+import json
 from django.db import connection
+from datetime import datetime, timedelta
 from django.db.utils import ProgrammingError
 
 LLM_ENDPOINT = os.getenv('LLM_ENDPOINT', 'http://host.docker.internal:11434/v1/completions')
 
-def transcribe_audio(audio_path, model_type = "small"):
-    model = whisper.load_model(model_type)
+def transcribe_audio(audio_path, model_type="small"):
+    model = load_model(model_type)
     result = model.transcribe(audio_path)
     return result['text']
 
 def add_instruction(transcribed_text):
-    # This is where you would call your LLaMA model
-    # For now, we'll simulate with a simple return
-    # In reality, you would make an API call or use a Python wrapper
-    today_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    instructions = f"You are a home inventory helper, convert the text into home inventory items into name, quantity and expiration date. \
-    If they mention things in the refrigerator, Add one week to the expiration date. and today is {today_date}. table name is inventory_inventoryitem.\
-    The output format is name, quantity and expiration_date in PostgreSQL input format, for date use '2024-08-17'::DATE + INTERVAL '7 DAY' format,\
-    and leave only sql INSERT/UPDATE/DELETE in output. {transcribed_text}"
-
-    return instructions
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    instructions = {
+        "task": "Convert transcribed text into home inventory items",
+        "today_date": today_date,
+        "transcribed_text": transcribed_text,
+        "instructions": [
+            "Extract name, quantity, and expiration_date from the text.",
+            "If items are mentioned as being in the refrigerator, add one week to the expiration date.",
+            "Return the output in JSON format, with fields: name, quantity, expiration_date. quantity only keep number"
+        ]
+    }
+    return json.dumps(instructions)
 
 def process_with_ollama(transcribed_text):
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {os.getenv("OLLAMA_API_KEY")}',  # If authentication is needed
+        'Authorization': f'Bearer {os.getenv("OLLAMA_API_KEY")}',
     }
     data = {
-        "model": "gemma",  # Replace with the specific model name you want to use
+        "model": "gemma",
         "prompt": add_instruction(transcribed_text),
         "temperature": 0
     }
     try:
-        response = requests.post(LLM_ENDPOINT, json=data, headers=headers)
+        response = post(LLM_ENDPOINT, json=data, headers=headers)
         response.raise_for_status()
         result = response.json()
         return result['choices'][0].get("text", "No response from the model")
-    except requests.exceptions.RequestException as e:
+    except exceptions.RequestException as e:
         return f"Error: {str(e)}"
-    
+
+def json_to_sql(json_response):
+    try:
+        json_response = json_response.replace('```json','').replace('```','')
+        items = json.loads(json_response)
+        if isinstance(items, dict):
+            items = [items]
+        
+        sql_commands = []
+        for item in items:
+            name = item.get("name")
+            quantity = item.get("quantity")
+            expiration_date = item.get("expiration_date")
+            if not expiration_date:
+                expiration_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+            
+            command = f"INSERT INTO inventory_inventoryitem (name, quantity, expiration_date) VALUES ('{name}', {quantity}, '{expiration_date}'::DATE);"
+            sql_commands.append(command)
+        return sql_commands
+    except json.JSONDecodeError:
+        return []
+
+def run_sql_command(commands):
+    """
+    Run a list of SQL commands on the PostgreSQL database.
+    """
+    results = []
+
+    for command in commands:
+        if not is_valid_sql(command):
+            results.append({"error": "Invalid SQL command.", "command": command})
+            continue
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(command)
+                if command.strip().upper().startswith("SELECT"):
+                    result = cursor.fetchall()
+                    results.append({"results": result, "command": command})
+                else:
+                    results.append({"success": "Command executed successfully.", "command": command})
+        except ProgrammingError as e:
+            results.append({"error": str(e), "command": command})
+        except Exception as e:
+            results.append({"error": f"An unexpected error occurred: {str(e)}", "command": command})
+
+    return results
+
 def is_valid_sql(command):
-    """
-    Basic check to ensure the command starts with a valid SQL keyword.
-    """
     valid_sql_keywords = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TRUNCATE", "GRANT", "REVOKE"]
     return any(command.strip().upper().startswith(keyword) for keyword in valid_sql_keywords)
-    
-def format_command(llm_response: str) -> str:
-    """
-    Extracts SQL content from a response that contains ```sql or ``` delimiters. 
-    If the command is pure SQL (INSERT, UPDATE, DELETE), return the full command.
-    
-    Parameters:
-    - llm_response (str): The response from the LLM containing the SQL command.
-    
-    Returns:
-    - str: The extracted SQL command or the original SQL command if it's pure.
-    """
-    # Extract SQL content within ```sql or ```
-    match = re.search(r'```sql\s*(.*?)\s*```', llm_response, re.DOTALL)
 
-    # If found, return the extracted SQL command
-    if match:
-        return match.group(1).strip().replace('home_inventory', 'inventory_inventoryitem')
-    
-    # If no ```sql``` blocks are found, check if it's a pure SQL command
-    pure_sql = re.match(r'^\s*(INSERT|UPDATE|DELETE)\b.*;', llm_response, re.IGNORECASE | re.DOTALL)
-    
-    if pure_sql:
-        return llm_response.strip().replace('home_inventory', 'inventory_inventoryitem')
-    
-    # If neither condition matches, return an empty string or raise an error
-    return ""
+def process_inventory(transcribed_text):
+    llm_response = process_with_ollama(transcribed_text)
+    sql_commands = json_to_sql(llm_response)
 
-
-def run_sql_command(command):
-    """
-    Run a SQL command on the PostgreSQL database.
-    """
-    if not is_valid_sql(command):
-        return {"error": "Invalid SQL command."}
-
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(command)
-            if command.strip().upper().startswith("SELECT"):
-                # If it's a SELECT query, fetch and return the results
-                results = cursor.fetchall()
-                print('Result', results)
-                return {"results": results}
-            else:
-                # For other commands, commit and return a success message
-                return {"success": "Command executed successfully."}
-    except ProgrammingError as e:
-        return {"error": str(e)}
-    except Exception as e:
-        return {"error": f"An unexpected error occurred: {str(e)}"}
+    results = []
+    for command in sql_commands:
+        result = run_sql_command(command)
+        results.append(result)
+    return results

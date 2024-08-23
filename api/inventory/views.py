@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 from .models import InventoryItem
 from .serializers import InventoryItemSerializer
-from .services import format_command, run_sql_command
+from .services import run_sql_command, json_to_sql
 from .tasks import transcribe_and_process_task
 from celery.result import AsyncResult
 from rest_framework.decorators import api_view
@@ -43,13 +43,10 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         
         result = AsyncResult(task_id)
         if result.state == 'SUCCESS':
-            print(result.result
-                  )
             if 'instructions' in result.result:
-                print("format command: ", result.result['instructions'])
-                cmd = format_command(result.result['instructions'])
-                print('Formatted command: ', cmd)
-                if cmd != '':
+                cmd = json_to_sql(result.result['instructions'])
+
+                if len(cmd) > 0:
                     run_sql_command(cmd)
 
             return Response({"status": result.state, "result": result.result})
